@@ -6,7 +6,9 @@ use App\Filament\Resources\TransactionResource;
 use App\Filament\Resources\TransactionResource\Widgets\ExpensesByMonthChart;
 use App\Filament\Resources\TransactionResource\Widgets\ExpensesByTypeChart;
 use App\Filament\Resources\TransactionResource\Widgets\ExpensesVsIncomeChart;
+use App\Filament\Resources\TransactionResource\Widgets\ExpensesByCategoryChart;
 use App\Models\Transaction;
+use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
 use Filament\Schemas\Components\Tabs\Tab;
 use Illuminate\Database\Eloquent\Builder;
@@ -15,12 +17,25 @@ class ListTransactions extends ListRecords
 {
     protected static string $resource = TransactionResource::class;
 
+    protected function getHeaderActions(): array
+    {
+        if (auth()->user()?->isAdmin() ?? false) {
+            return [];
+        }
+
+        return [
+            CreateAction::make()
+                        ->label('Add Transaction'),
+        ];
+    }
+
     protected function getHeaderWidgets(): array
     {
         return [
             ExpensesVsIncomeChart::class,
             ExpensesByTypeChart::class,
             ExpensesByMonthChart::class,
+            ExpensesByCategoryChart::class,
         ];
     }
 

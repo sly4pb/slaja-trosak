@@ -7,13 +7,11 @@ use PhpOffice\PhpSpreadsheet\IOFactory;
 
 class IntesaParser implements BankParserInterface
 {
-    // Intesa kolone (0-indeksirane)
     private const COL_DATE        = 0;
     private const COL_TYPE        = 1;
     private const COL_DESCRIPTION = 2;
     private const COL_AMOUNT      = 3;
 
-    // Red od kojeg pocinje data (preskacemo header)
     private const DATA_START_ROW = 1;
 
     public function parse(string $filePath): Collection
@@ -25,7 +23,6 @@ class IntesaParser implements BankParserInterface
         $transactions = collect();
 
         foreach ($rows as $index => $row) {
-            // Preskoci header i prazne redove
             if ($index < self::DATA_START_ROW) {
                 continue;
             }
@@ -35,7 +32,6 @@ class IntesaParser implements BankParserInterface
             $description = trim($row[self::COL_DESCRIPTION] ?? '');
             $amountRaw   = trim($row[self::COL_AMOUNT] ?? '');
 
-            // Preskoci ako nema datuma ili iznosa
             if (empty($date) || empty($amountRaw)) {
                 continue;
             }
@@ -54,22 +50,22 @@ class IntesaParser implements BankParserInterface
                 'description' => $description,
                 'amount'      => $parsedAmount,
                 'currency'    => $currency,
-                'raw'         => implode(' | ', array_filter([$date, $type, $description, $amountRaw])),
+                'raw'         => sprintf(
+                    '%s|%.2f|%s',
+                    $parsedDate,
+                    $parsedAmount,
+                    $description
+                )
             ]);
         }
 
         return $transactions;
     }
 
-    /**
-     * Parsuje datum formata "dd.mm.yyyy" u "Y-m-d"
-     */
     private function parseDate(string $value): ?string
     {
-        // Ocisti visak znakova (apostrofi, razmaci)
         $value = preg_replace("/[^0-9.]/", '', $value);
-
-        $date = \DateTime::createFromFormat('d.m.Y', $value);
+        $date  = \DateTime::createFromFormat('d.m.Y', $value);
 
         if ($date === false) {
             return null;
@@ -78,21 +74,13 @@ class IntesaParser implements BankParserInterface
         return $date->format('Y-m-d');
     }
 
-    /**
-     * Parsuje iznos npr. "- 656,45 RSD" ili "+ 50.000,00 RSD" u float
-     */
     private function parseAmount(string $value): ?float
     {
-        // Odredi predznak
         $negative = str_contains($value, '-');
-
-        // Ukloni sve osim cifara, zareza i tacke
         $clean = preg_replace('/[^0-9,.]/', '', $value);
 
-        // Intesa format: tacka je separator hiljada, zarez je decimalni
-        // npr. "50.000,00" -> "50000.00"
-        $clean = str_replace('.', '', $clean);   // ukloni separator hiljada
-        $clean = str_replace(',', '.', $clean);  // zamijeni decimalni zarez sa tackom
+        $clean = str_replace('.', '', $clean);
+        $clean = str_replace(',', '.', $clean);
 
         if (!is_numeric($clean)) {
             return null;
@@ -103,15 +91,12 @@ class IntesaParser implements BankParserInterface
         return $negative ? -$amount : $amount;
     }
 
-    /**
-     * Izvuce valutu iz stringa npr. "- 656,45 RSD" -> "RSD"
-     */
     private function parseCurrency(string $value): string
     {
         if (preg_match('/([A-Z]{3})/', $value, $matches)) {
             return $matches[1];
         }
 
-        return 'RSD'; // default za Intesa Srbija
+        return 'RSD';
     }
 }

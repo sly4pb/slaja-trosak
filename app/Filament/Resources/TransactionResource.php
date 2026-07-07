@@ -4,11 +4,16 @@ namespace App\Filament\Resources;
 
 use App\Enums\BankType;
 use App\Enums\TransactionCategory;
+use App\Enums\UserRole;
 use App\Filament\Resources\TransactionResource\Pages;
 use App\Models\Transaction;
+use App\Services\CategoryRuleService;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Textarea;
 use Filament\Schemas\Schema;
+use Filament\Schemas\Components\Section;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -27,9 +32,55 @@ class TransactionResource extends Resource
     protected static ?string $pluralModelLabel = 'Transactions';
     protected static ?int $navigationSort = 2;
 
+    public static function canCreate(): bool
+    {
+        return ! (auth()->user()?->isAdmin() ?? false);
+    }
+
     public static function form(Schema $schema): Schema
     {
-        return $schema->components([]);
+        return $schema->components([
+            Section::make('New Transaction')
+                   ->description('Manually add a transaction that was not imported from a bank file.')
+                   ->schema([
+                       Select::make('bank')
+                             ->label('Bank')
+                             ->options(BankType::options())
+                             ->required()
+                             ->native(false)
+                             ->placeholder('Choose bank'),
+
+                       DatePicker::make('date')
+                                 ->label('Date')
+                                 ->required()
+                                 ->native(false)
+                                 ->default(now()),
+
+                       Textarea::make('description')
+                               ->label('Description')
+                               ->rows(2)
+                               ->required(),
+
+                       TextInput::make('amount')
+                                ->label('Amount')
+                                ->numeric()
+                                ->required()
+                                ->step(0.01)
+                                ->helperText('Use a negative number for expenses, positive for income.')
+                                ->prefix('RSD'),
+
+                       Select::make('category')
+                             ->label('Category (optional)')
+                             ->options(TransactionCategory::options())
+                             ->native(false)
+                             ->placeholder('No category'),
+
+                       TextInput::make('type')
+                                ->label('Type (optional)')
+                                ->placeholder('e.g. Cash, Card payment, Transfer...'),
+                   ])
+                   ->columns(1),
+        ]);
     }
 
     public static function table(Table $table): Table
@@ -38,9 +89,9 @@ class TransactionResource extends Resource
             ->query(
                 Transaction::query()
                            ->when(
-                        ! (auth()->user()?->isAdmin() ?? false),
-                        fn ($query) => $query->where('user_id', auth()->id())
-                    )
+                               ! (auth()->user()?->isAdmin() ?? false),
+                               fn ($query) => $query->where('user_id', auth()->id())
+                           )
                            ->latest('date')
             )
             ->columns([
@@ -97,7 +148,11 @@ class TransactionResource extends Resource
             ->filters([
                 Tables\Filters\SelectFilter::make('user_id')
                                            ->label('User')
-                                           ->relationship('user', 'name')
+                                           ->relationship(
+                                               'user',
+                                               'name',
+                                               fn ($query) => $query->where('role', UserRole::User->value)
+                                           )
                                            ->visible(fn () => auth()->user()?->isAdmin() ?? false),
 
                 Tables\Filters\SelectFilter::make('bank')
@@ -140,15 +195,12 @@ class TransactionResource extends Resource
                                      })
                                      ->indicateUsing(function (array $data): array {
                                          $indicators = [];
-
                                          if ($data['from'] ?? null) {
                                              $indicators['from'] = 'From: ' . \Carbon\Carbon::parse($data['from'])->format('d.m.Y');
                                          }
-
                                          if ($data['until'] ?? null) {
                                              $indicators['until'] = 'Until: ' . \Carbon\Carbon::parse($data['until'])->format('d.m.Y');
                                          }
-
                                          return $indicators;
                                      }),
 
@@ -198,14 +250,32 @@ class TransactionResource extends Resource
                                     ->native(false),
                           ])
                           ->action(function (Collection $records, array $data) {
+                              $category       = TransactionCategory::from($data['category']);
+                              $ruleService    = app(CategoryRuleService::class);
+                              $userId         = auth()->id();
+                              $retroTotal     = 0;
+
                               $records->each(
-                                  fn (Transaction $record) => $record->update(['category' => $data['category']])
+                                  fn (Transaction $record) => $record->update(['category' => $category->value])
                               );
+
+                              $keywords = $ruleService->extractKeywordsFromDescriptions(
+                                  $records->pluck('description')
+                              );
+
+                              foreach ($keywords as $keyword) {
+                                  $retroTotal += $ruleService->createOrUpdate($userId, $keyword, $category);
+                              }
+
+                              $message = count($records) . ' transaction(s) categorized as ' . $category->label() . '.';
+                              if ($retroTotal > 0) {
+                                  $message .= " {$retroTotal} existing transaction(s) auto-categorized by rule.";
+                              }
 
                               Notification::make()
                                           ->success()
                                           ->title('Category assigned')
-                                          ->body(count($records) . ' transaction(s) updated.')
+                                          ->body($message)
                                           ->send();
                           })
                           ->deselectRecordsAfterCompletion(),
@@ -220,7 +290,8 @@ class TransactionResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index' => Pages\ListTransactions::route('/'),
+            'index'  => Pages\ListTransactions::route('/'),
+            'create' => Pages\CreateTransaction::route('/create'),
         ];
     }
 }

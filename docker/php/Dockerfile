@@ -15,6 +15,9 @@ RUN apt-get update && apt-get install -y \
     libwebp-dev \
     zip \
     unzip \
+    python3 \
+    python3-pip \
+    python3-venv \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -38,6 +41,10 @@ RUN docker-php-ext-configure gd \
 # ─── Redis extension (PECL) ────────────────────────────────
 RUN pecl install redis \
     && docker-php-ext-enable redis
+
+# ─── Python paketi za AIK PDF parser (pdfplumber) ──────────
+# --break-system-packages jer Debian/PHP image nema virtualenv po defaultu
+RUN pip3 install --no-cache-dir --break-system-packages pdfplumber
 
 # ─── Composer ──────────────────────────────────────────────
 COPY --from=composer:2.7 /usr/bin/composer /usr/bin/composer

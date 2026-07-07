@@ -13,6 +13,10 @@ use Throwable;
 
 class BankUploadService
 {
+    public function __construct(
+        private readonly CategoryRuleService $categoryRuleService
+    ) {}
+
     public function handle(UploadedFile $file, BankType $bank, int $userId): BankUpload
     {
         $storedPath = $file->store("bank-uploads/{$userId}", 'private');
@@ -30,23 +34,52 @@ class BankUploadService
             $absolutePath = Storage::disk('private')->path($storedPath);
             $transactions = $parser->parse($absolutePath);
 
-            DB::transaction(function () use ($transactions, $upload, $userId, $bank) {
+            $existingKeys = array_fill_keys(
+                Transaction::query()
+                           ->where('user_id', $userId)
+                           ->where('bank', $bank->value)
+                           ->selectRaw('CONCAT(DATE(date), "|", amount, "|", IFNULL(description, "")) as dup_key')
+                           ->pluck('dup_key')
+                           ->toArray(),
+                true
+            );
+
+            $newTransactions = $transactions->reject(function (array $t) use ($existingKeys) {
+                return isset($existingKeys[$t['raw']]);
+            });
+
+            $skipped = $transactions->count() - $newTransactions->count();
+
+            $newTransactions = $this->categoryRuleService->applyRulesToTransactions(
+                $userId,
+                $newTransactions
+            );
+
+            DB::transaction(function () use ($newTransactions, $upload, $userId, $bank) {
+                if ($newTransactions->isEmpty()) {
+                    $upload->update([
+                        'status'             => 'done',
+                        'transactions_count' => 0,
+                    ]);
+                    return;
+                }
+
                 $now   = now();
-                $chunk = $transactions->map(fn ($t) => [
+                $chunk = $newTransactions->map(fn ($t) => [
                     'user_id'          => $userId,
                     'bank_upload_id'   => $upload->id,
                     'bank'             => $bank->value,
                     'date'             => $t['date'],
                     'transaction_date' => $t['date'],
                     'type'             => $t['type'],
-                    'category'         => null,
+                    'category'         => $t['category'] ?? null,
                     'description'      => $t['description'],
                     'amount'           => $t['amount'],
                     'currency'         => $t['currency'],
                     'raw'              => $t['raw'],
                     'created_at'       => $now,
                     'updated_at'       => $now,
-                ])->toArray();
+                ])->values()->toArray();
 
                 Transaction::insert($chunk);
 
@@ -56,6 +89,11 @@ class BankUploadService
                 ]);
             });
 
+            if ($skipped > 0) {
+                $upload->update([
+                    'error_message' => "Skipped {$skipped} duplicate transaction(s).",
+                ]);
+            }
         } catch (Throwable $e) {
             $upload->update([
                 'status'        => 'failed',

@@ -20,11 +20,15 @@ class CreateBankUpload extends CreateRecord
         $bank    = BankType::from($data['bank']);
         $service = app(BankUploadService::class);
 
-        $tempPath = Storage::disk('private')->path($data['file']);
-        $file     = new \Illuminate\Http\File($tempPath);
+        $storedFilename = basename($data['file']);
+        $originalName   = preg_replace('/^\d+_/', '', $storedFilename);
+
+        $absolutePath = Storage::disk('private')->path($data['file']);
+        $file         = new \Illuminate\Http\File($absolutePath);
+
         $uploaded = new \Illuminate\Http\UploadedFile(
             $file->getPathname(),
-            $file->getFilename(),
+            $originalName,
             $file->getMimeType(),
             null,
             true
@@ -46,23 +50,35 @@ class CreateBankUpload extends CreateRecord
     {
         $record = $this->record;
 
-        if ($record->isDone()) {
-            return Notification::make()
-                ->success()
-                ->title('Izvod uspješno uvezen')
-                ->body("Pronađeno {$record->transactions_count} transakcija.");
-        }
-
         if ($record->isFailed()) {
             return Notification::make()
-                ->danger()
-                ->title('Greška pri uvozu')
-                ->body($record->error_message);
+                               ->danger()
+                               ->title('Import error')
+                               ->body($record->error_message);
+        }
+
+        if ($record->isDone()) {
+            $hasDuplicates = str_contains($record->error_message ?? '', 'duplicate');
+
+            $body = $record->transactions_count > 0
+                ? "Imported {$record->transactions_count} transaction(s)."
+                : 'No new transactions found.';
+
+            if ($hasDuplicates) {
+                preg_match('/Skipped (\d+)/', $record->error_message ?? '', $matches);
+                $skipped = $matches[1] ?? '?';
+                $body   .= " {$skipped} duplicate(s) skipped.";
+            }
+
+            return Notification::make()
+                               ->success()
+                               ->title('Statement successfully imported')
+                               ->body($body);
         }
 
         return Notification::make()
-            ->warning()
-            ->title('Fajl je uploadovan')
-            ->body('Obrada je u toku...');
+                           ->warning()
+                           ->title('File uploaded')
+                           ->body('Processing...');
     }
 }
