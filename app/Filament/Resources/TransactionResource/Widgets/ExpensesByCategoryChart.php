@@ -28,15 +28,31 @@ class ExpensesByCategoryChart extends ChartWidget
         $data = Transaction::query()
                            ->when(! $isAdmin, fn ($q) => $q->where('user_id', auth()->id()))
                            ->where('amount', '<', 0)
-                           ->whereNotNull('category')
                            ->selectRaw('category, SUM(ABS(amount)) as total')
                            ->groupBy('category')
                            ->orderByDesc('total')
                            ->get();
 
-        $labels = $data->map(fn ($row) => $row->category?->label() ?? $row->category)->toArray();
+        $labels = $data->map(function ($row) {
+            if ($row->category === null) {
+                return 'Unsorted';
+            }
+            return $row->category instanceof TransactionCategory
+                ? $row->category->label()
+                : (TransactionCategory::tryFrom($row->category)?->label() ?? 'Unsorted');
+        })->toArray();
+
         $totals = $data->map(fn ($row) => round($row->total, 2))->toArray();
-        $colors = $data->map(fn ($row) => $this->categoryColor($row->category))->toArray();
+
+        $colors = $data->map(function ($row) {
+            if ($row->category === null) {
+                return '#cbd5e1'; // light gray for unsorted
+            }
+            $cat = $row->category instanceof TransactionCategory
+                ? $row->category
+                : TransactionCategory::tryFrom($row->category);
+            return $this->categoryColor($cat);
+        })->toArray();
 
         return [
             'datasets' => [
@@ -56,7 +72,6 @@ class ExpensesByCategoryChart extends ChartWidget
     protected function getOptions(): array
     {
         return [
-            // Bez indexAxis: 'y' — vertikalni bar chart (default)
             'maintainAspectRatio' => false,
             'plugins' => [
                 'legend' => [
@@ -66,7 +81,7 @@ class ExpensesByCategoryChart extends ChartWidget
             'scales' => [
                 'x' => [
                     'ticks' => [
-                        'font'     => ['size' => 11],
+                        'font'        => ['size' => 11],
                         'maxRotation' => 30,
                     ],
                 ],
@@ -83,7 +98,7 @@ class ExpensesByCategoryChart extends ChartWidget
     private function categoryColor(?TransactionCategory $category): string
     {
         if ($category === null) {
-            return '#94a3b8';
+            return '#cbd5e1';
         }
 
         return match($category) {

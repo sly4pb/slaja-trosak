@@ -7,6 +7,7 @@ use App\Enums\TransactionCategory;
 use App\Enums\UserRole;
 use App\Filament\Resources\TransactionResource\Pages;
 use App\Models\Transaction;
+use App\Models\TransactionComment;
 use App\Services\CategoryRuleService;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
@@ -21,6 +22,7 @@ use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
 use Filament\Notifications\Notification;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\HtmlString;
 
 class TransactionResource extends Resource
 {
@@ -88,6 +90,7 @@ class TransactionResource extends Resource
         return $table
             ->query(
                 Transaction::query()
+                           ->withCount('comments')
                            ->when(
                                ! (auth()->user()?->isAdmin() ?? false),
                                fn ($query) => $query->where('user_id', auth()->id())
@@ -140,6 +143,24 @@ class TransactionResource extends Resource
                                          ->color(fn (Transaction $record) => $record->amount >= 0 ? 'success' : 'danger')
                                          ->alignEnd()
                                          ->sortable(),
+
+                // Comment indicator — shows chat bubble icon with count if comments exist
+                Tables\Columns\TextColumn::make('comments_count')
+                                         ->label('')
+                                         ->formatStateUsing(function (Transaction $record): HtmlString {
+                                             $count = $record->comments_count ?? 0;
+                                             if ($count === 0) {
+                                                 return new HtmlString('');
+                                             }
+                                             return new HtmlString(
+                                                 '<span class="inline-flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500">'
+                                                 . '<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>'
+                                                 . $count
+                                                 . '</span>'
+                                             );
+                                         })
+                                         ->alignCenter()
+                                         ->toggleable(),
 
                 Tables\Columns\TextColumn::make('currency')
                                          ->label('Currency')
@@ -224,9 +245,47 @@ class TransactionResource extends Resource
                                      ->label('Only income')
                                      ->query(fn ($query) => $query->where('amount', '>', 0))
                                      ->toggle(),
+
+                Tables\Filters\Filter::make('has_comments')
+                                     ->label('Has comments')
+                                     ->query(fn ($query) => $query->has('comments'))
+                                     ->toggle(),
             ])
             ->filtersLayout(Tables\Enums\FiltersLayout::AboveContent)
             ->recordActions([
+                Action::make('comments')
+                      ->label(fn (Transaction $record) => $record->comments_count > 0 ? 'Comments (' . $record->comments_count . ')' : 'Add Comment')
+                      ->icon('heroicon-o-chat-bubble-left-ellipsis')
+                      ->color('gray')
+                      ->modalHeading('Comments')
+                      ->modalContent(fn (Transaction $record) => view(
+                          'filament.modals.transaction-comments',
+                          [
+                              'transaction' => $record,
+                              'comments'    => $record->comments()->with('user')->latest()->get(),
+                          ]
+                      ))
+                      ->form([
+                          Textarea::make('new_comment')
+                                  ->label('New Comment')
+                                  ->rows(3)
+                                  ->placeholder('Write a comment...')
+                                  ->required(),
+                      ])
+                      ->action(function (Transaction $record, array $data) {
+                          TransactionComment::create([
+                              'transaction_id' => $record->id,
+                              'user_id'        => auth()->id(),
+                              'body'           => $data['new_comment'],
+                          ]);
+
+                          Notification::make()
+                                      ->success()
+                                      ->title('Comment added')
+                                      ->send();
+                      })
+                      ->modalSubmitActionLabel('Add Comment'),
+
                 Action::make('details')
                       ->label('Details')
                       ->icon('heroicon-o-information-circle')
@@ -250,10 +309,10 @@ class TransactionResource extends Resource
                                     ->native(false),
                           ])
                           ->action(function (Collection $records, array $data) {
-                              $category       = TransactionCategory::from($data['category']);
-                              $ruleService    = app(CategoryRuleService::class);
-                              $userId         = auth()->id();
-                              $retroTotal     = 0;
+                              $category    = TransactionCategory::from($data['category']);
+                              $ruleService = app(CategoryRuleService::class);
+                              $userId      = auth()->id();
+                              $retroTotal  = 0;
 
                               $records->each(
                                   fn (Transaction $record) => $record->update(['category' => $category->value])

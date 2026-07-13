@@ -67,20 +67,6 @@ class CategoryRuleService
         });
     }
 
-    /**
-     * Izvuci keyword iz grupe opisa transakcija.
-     *
-     * Strategija:
-     * 1. Ako opis sadrzi dugacak niz cifara (broj racuna/reference >= 10 cifara),
-     *    uzimamo tekst IZA tog broja kao keyword (naziv primaoca/firme).
-     *    Primjer: "Bezgotovinski prenos u RSD 160000000023860524 GENERALI OSIGURANJE"
-     *             → keyword: "GENERALI OSIGURANJE"
-     *
-     * 2. Ako nema broja racuna, koristimo zajednicki prefiks grupe opisa
-     *    (prodavnica/ATM opisi), odsjecen na granicu rijeci.
-     *    Primjer: "Kupovina MP587 S. MARKOVICA CACCacak RS SLAĐAN MARJANOVIĆ"
-     *             → keyword: "Kupovina MP587 S. MARKOVICA CACCacak RS"
-     */
     public function extractKeywordsFromDescriptions(Collection $descriptions): Collection
     {
         $descriptions = $descriptions
@@ -105,14 +91,8 @@ class CategoryRuleService
                        ->values();
     }
 
-    /**
-     * Izvuci keyword iz jednog opisa.
-     * Ako sadrzi broj racuna — uzmi naziv primaoca iza broja.
-     * Ako ne — uzmi prefiks do MAX_PREFIX_LENGTH znakova.
-     */
     private function extractSingleKeyword(string $description): string
     {
-        // Trazimo dugacak niz cifara (broj racuna/reference, min 10 cifara)
         if (preg_match('/\d{10,}/', $description, $matches, PREG_OFFSET_CAPTURE)) {
             $offset      = $matches[0][1];
             $numberLen   = mb_strlen($matches[0][0]);
@@ -124,13 +104,9 @@ class CategoryRuleService
             }
         }
 
-        // Nema broja racuna — koristi prefiks
         return $this->truncateAtWordBoundary($description, self::MAX_PREFIX_LENGTH);
     }
 
-    /**
-     * Grupise opise po zajednickom prefiksu (prvih MAX_PREFIX_LENGTH znakova).
-     */
     private function groupByCommonPrefix(Collection $descriptions): Collection
     {
         $groups = collect();

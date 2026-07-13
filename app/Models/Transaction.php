@@ -6,6 +6,7 @@ use App\Enums\BankType;
 use App\Enums\TransactionCategory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Transaction extends Model
 {
@@ -39,6 +40,11 @@ class Transaction extends Model
     public function bankUpload(): BelongsTo
     {
         return $this->belongsTo(BankUpload::class);
+    }
+
+    public function comments(): HasMany
+    {
+        return $this->hasMany(TransactionComment::class);
     }
 
     public function isExpense(): bool

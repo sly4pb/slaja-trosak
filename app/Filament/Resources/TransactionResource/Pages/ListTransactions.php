@@ -24,8 +24,7 @@ class ListTransactions extends ListRecords
         }
 
         return [
-            CreateAction::make()
-                        ->label('Add Transaction'),
+            CreateAction::make()->label('Add Transaction'),
         ];
     }
 
@@ -55,22 +54,16 @@ class ListTransactions extends ListRecords
 
         return [
             'all' => Tab::make('All')
-                        ->badge(
-                            $scoped(Transaction::query())->count()
-                        ),
+                        ->badge($scoped(Transaction::query())->count()),
 
             'expenses' => Tab::make('Expenses')
                              ->modifyQueryUsing(fn (Builder $q) => $q->where('amount', '<', 0))
-                             ->badge(
-                                 $scoped(Transaction::query())->where('amount', '<', 0)->count()
-                             )
+                             ->badge($scoped(Transaction::query())->where('amount', '<', 0)->count())
                              ->badgeColor('danger'),
 
             'income' => Tab::make('Incomes')
                            ->modifyQueryUsing(fn (Builder $q) => $q->where('amount', '>', 0))
-                           ->badge(
-                               $scoped(Transaction::query())->where('amount', '>', 0)->count()
-                           )
+                           ->badge($scoped(Transaction::query())->where('amount', '>', 0)->count())
                            ->badgeColor('success'),
         ];
     }
