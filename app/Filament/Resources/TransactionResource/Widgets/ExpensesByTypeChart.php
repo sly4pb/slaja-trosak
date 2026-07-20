@@ -4,6 +4,7 @@ namespace App\Filament\Resources\TransactionResource\Widgets;
 
 use App\Models\Transaction;
 use Filament\Widgets\ChartWidget;
+use Livewire\Attributes\On;
 
 class ExpensesByTypeChart extends ChartWidget
 {
@@ -12,6 +13,17 @@ class ExpensesByTypeChart extends ChartWidget
     protected static ?int $sort = 1;
 
     protected int|string|array $columnSpan = 1;
+
+    public ?string $filterFrom  = null;
+    public ?string $filterUntil = null;
+
+    #[On('filtersUpdated')]
+    public function updateFilters(?string $from = null, ?string $until = null): void
+    {
+        $this->filterFrom  = $from;
+        $this->filterUntil = $until;
+        $this->updateChartData();
+    }
 
     protected function getType(): string
     {
@@ -24,6 +36,8 @@ class ExpensesByTypeChart extends ChartWidget
 
         $data = Transaction::query()
                            ->when(! $isAdmin, fn ($q) => $q->where('user_id', auth()->id()))
+                           ->when($this->filterFrom,  fn ($q) => $q->whereDate('date', '>=', $this->filterFrom))
+                           ->when($this->filterUntil, fn ($q) => $q->whereDate('date', '<=', $this->filterUntil))
                            ->where('amount', '<', 0)
                            ->selectRaw('type, SUM(ABS(amount)) as total')
                            ->groupBy('type')
@@ -33,8 +47,8 @@ class ExpensesByTypeChart extends ChartWidget
         return [
             'datasets' => [
                 [
-                    'label' => 'Expenses (RSD)',
-                    'data'  => $data->pluck('total')->map(fn ($v) => round($v, 2))->toArray(),
+                    'label'           => 'Expenses (RSD)',
+                    'data'            => $data->pluck('total')->map(fn ($v) => round($v, 2))->toArray(),
                     'backgroundColor' => [
                         '#f87171', '#fb923c', '#fbbf24', '#a3e635',
                         '#34d399', '#22d3ee', '#60a5fa', '#a78bfa',

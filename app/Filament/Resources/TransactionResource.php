@@ -90,49 +90,59 @@ class TransactionResource extends Resource
         return $table
             ->query(
                 Transaction::query()
-                           ->withCount('comments')
                            ->when(
-                               ! (auth()->user()?->isAdmin() ?? false),
+                               auth()->check() && ! (auth()->user()?->isAdmin() ?? false),
                                fn ($query) => $query->where('user_id', auth()->id())
                            )
                            ->latest('date')
             )
             ->columns([
+                // Visible only to admin — hidden on mobile
                 Tables\Columns\TextColumn::make('user.name')
                                          ->label('User')
                                          ->visible(fn () => auth()->user()?->isAdmin() ?? false)
                                          ->badge()
-                                         ->color('gray'),
+                                         ->color('gray')
+                                         ->toggleable(),
 
+                // Always visible
                 Tables\Columns\TextColumn::make('date')
                                          ->label('Date')
                                          ->date('d.m.Y')
                                          ->sortable(),
 
+                // Hidden on mobile — not critical info
                 Tables\Columns\TextColumn::make('bank')
                                          ->label('Bank')
                                          ->formatStateUsing(fn (BankType $state) => $state->label())
                                          ->badge()
-                                         ->color('primary'),
+                                         ->color('primary')
+                                         ->toggleable()
+                                         ->hiddenOn(['xs', 'sm']),
 
+                // Hidden on mobile
                 Tables\Columns\TextColumn::make('type')
                                          ->label('Type')
                                          ->badge()
                                          ->color('gray')
-                                         ->toggleable(),
+                                         ->toggleable()
+                                         ->hiddenOn(['xs', 'sm']),
 
+                // Always visible — most important classification
                 Tables\Columns\TextColumn::make('category')
                                          ->label('Category')
                                          ->badge()
                                          ->color(fn (?TransactionCategory $state) => $state?->color() ?? 'gray')
                                          ->formatStateUsing(fn (?TransactionCategory $state) => $state?->label() ?? '—'),
 
+                // Always visible — truncate more aggressively on mobile
                 Tables\Columns\TextColumn::make('description')
                                          ->label('Description')
-                                         ->limit(50)
+                                         ->limit(30)
                                          ->tooltip(fn (Transaction $record) => $record->description)
                                          ->searchable(),
 
+                // Always visible — most important column
                 Tables\Columns\TextColumn::make('amount')
                                          ->label('Amount')
                                          ->formatStateUsing(function (Transaction $record): string {
@@ -144,27 +154,29 @@ class TransactionResource extends Resource
                                          ->alignEnd()
                                          ->sortable(),
 
-                // Comment indicator — shows chat bubble icon with count if comments exist
+                // Comment indicator
                 Tables\Columns\TextColumn::make('comments_count')
                                          ->label('')
-                                         ->formatStateUsing(function (Transaction $record): HtmlString {
-                                             $count = $record->comments_count ?? 0;
-                                             if ($count === 0) {
+                                         ->getStateUsing(fn (Transaction $record) => $record->comments()->count())
+                                         ->formatStateUsing(function (int $state): HtmlString {
+                                             if ($state === 0) {
                                                  return new HtmlString('');
                                              }
                                              return new HtmlString(
                                                  '<span class="inline-flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500">'
                                                  . '<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>'
-                                                 . $count
+                                                 . $state
                                                  . '</span>'
                                              );
                                          })
                                          ->alignCenter()
                                          ->toggleable(),
 
+                // Hidden on mobile
                 Tables\Columns\TextColumn::make('currency')
                                          ->label('Currency')
-                                         ->toggleable(isToggledHiddenByDefault: true),
+                                         ->toggleable(isToggledHiddenByDefault: true)
+                                         ->hiddenOn(['xs', 'sm']),
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('user_id')
@@ -174,7 +186,7 @@ class TransactionResource extends Resource
                                                'name',
                                                fn ($query) => $query->where('role', UserRole::User->value)
                                            )
-                                           ->visible(fn () => auth()->user()?->isAdmin() ?? false),
+                                           ->visible(fn () => auth()->check() && (auth()->user()?->isAdmin() ?? false)),
 
                 Tables\Filters\SelectFilter::make('bank')
                                            ->label('Bank')
@@ -189,7 +201,7 @@ class TransactionResource extends Resource
                                            ->options(
                                                fn () => Transaction::query()
                                                                    ->when(
-                                                                       ! (auth()->user()?->isAdmin() ?? false),
+                                                                       auth()->check() && ! (auth()->user()?->isAdmin() ?? false),
                                                                        fn ($q) => $q->where('user_id', auth()->id())
                                                                    )
                                                                    ->whereNotNull('type')
@@ -231,7 +243,7 @@ class TransactionResource extends Resource
                                                'bankUpload',
                                                'original_filename',
                                                fn ($query) => $query->when(
-                                                   ! (auth()->user()?->isAdmin() ?? false),
+                                                   auth()->check() && ! (auth()->user()?->isAdmin() ?? false),
                                                    fn ($q) => $q->where('user_id', auth()->id())
                                                )
                                            ),
@@ -254,7 +266,9 @@ class TransactionResource extends Resource
             ->filtersLayout(Tables\Enums\FiltersLayout::AboveContent)
             ->recordActions([
                 Action::make('comments')
-                      ->label(fn (Transaction $record) => $record->comments_count > 0 ? 'Comments (' . $record->comments_count . ')' : 'Add Comment')
+                      ->label(fn (Transaction $record) => $record->comments()->count() > 0
+                          ? 'Comments (' . $record->comments()->count() . ')'
+                          : 'Add Comment')
                       ->icon('heroicon-o-chat-bubble-left-ellipsis')
                       ->color('gray')
                       ->modalHeading('Comments')

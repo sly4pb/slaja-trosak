@@ -4,6 +4,7 @@ namespace App\Filament\Resources\TransactionResource\Widgets;
 
 use App\Models\Transaction;
 use Filament\Widgets\ChartWidget;
+use Livewire\Attributes\On;
 
 class ExpensesByMonthChart extends ChartWidget
 {
@@ -13,14 +14,25 @@ class ExpensesByMonthChart extends ChartWidget
 
     protected int|string|array $columnSpan = 1;
 
+    public ?string $filterFrom  = null;
+    public ?string $filterUntil = null;
+
+    #[On('filtersUpdated')]
+    public function updateFilters(?string $from = null, ?string $until = null): void
+    {
+        $this->filterFrom  = $from;
+        $this->filterUntil = $until;
+        $this->updateChartData();
+    }
+
     protected function getType(): string
     {
         return 'pie';
     }
 
     private const MONTHS = [
-        1 => 'January', 2 => 'February', 3 => 'March', 4 => 'April',
-        5 => 'May', 6 => 'June', 7 => 'July', 8 => 'August',
+        1 => 'January', 2 => 'February', 3 => 'March',    4 => 'April',
+        5 => 'May',     6 => 'June',     7 => 'July',      8 => 'August',
         9 => 'September', 10 => 'October', 11 => 'November', 12 => 'December',
     ];
 
@@ -30,6 +42,8 @@ class ExpensesByMonthChart extends ChartWidget
 
         $data = Transaction::query()
                            ->when(! $isAdmin, fn ($q) => $q->where('user_id', auth()->id()))
+                           ->when($this->filterFrom,  fn ($q) => $q->whereDate('date', '>=', $this->filterFrom))
+                           ->when($this->filterUntil, fn ($q) => $q->whereDate('date', '<=', $this->filterUntil))
                            ->where('amount', '<', 0)
                            ->selectRaw('MONTH(date) as month, YEAR(date) as year, SUM(ABS(amount)) as total')
                            ->groupBy('year', 'month')
@@ -40,8 +54,8 @@ class ExpensesByMonthChart extends ChartWidget
         return [
             'datasets' => [
                 [
-                    'label' => 'Expenses (RSD)',
-                    'data'  => $data->pluck('total')->map(fn ($v) => round($v, 2))->toArray(),
+                    'label'           => 'Expenses (RSD)',
+                    'data'            => $data->pluck('total')->map(fn ($v) => round($v, 2))->toArray(),
                     'backgroundColor' => [
                         '#f87171', '#fb923c', '#fbbf24', '#a3e635',
                         '#34d399', '#22d3ee', '#60a5fa', '#a78bfa',

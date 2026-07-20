@@ -5,6 +5,7 @@ namespace App\Filament\Resources\TransactionResource\Widgets;
 use App\Enums\TransactionCategory;
 use App\Models\Transaction;
 use Filament\Widgets\ChartWidget;
+use Livewire\Attributes\On;
 
 class ExpensesByCategoryChart extends ChartWidget
 {
@@ -15,6 +16,17 @@ class ExpensesByCategoryChart extends ChartWidget
     protected int|string|array $columnSpan = 'full';
 
     protected ?string $maxHeight = '300px';
+
+    public ?string $filterFrom  = null;
+    public ?string $filterUntil = null;
+
+    #[On('filtersUpdated')]
+    public function updateFilters(?string $from = null, ?string $until = null): void
+    {
+        $this->filterFrom  = $from;
+        $this->filterUntil = $until;
+        $this->updateChartData();
+    }
 
     protected function getType(): string
     {
@@ -27,6 +39,8 @@ class ExpensesByCategoryChart extends ChartWidget
 
         $data = Transaction::query()
                            ->when(! $isAdmin, fn ($q) => $q->where('user_id', auth()->id()))
+                           ->when($this->filterFrom,  fn ($q) => $q->whereDate('date', '>=', $this->filterFrom))
+                           ->when($this->filterUntil, fn ($q) => $q->whereDate('date', '<=', $this->filterUntil))
                            ->where('amount', '<', 0)
                            ->selectRaw('category, SUM(ABS(amount)) as total')
                            ->groupBy('category')
@@ -46,7 +60,7 @@ class ExpensesByCategoryChart extends ChartWidget
 
         $colors = $data->map(function ($row) {
             if ($row->category === null) {
-                return '#cbd5e1'; // light gray for unsorted
+                return '#cbd5e1';
             }
             $cat = $row->category instanceof TransactionCategory
                 ? $row->category
@@ -74,9 +88,7 @@ class ExpensesByCategoryChart extends ChartWidget
         return [
             'maintainAspectRatio' => false,
             'plugins' => [
-                'legend' => [
-                    'display' => false,
-                ],
+                'legend' => ['display' => false],
             ],
             'scales' => [
                 'x' => [
@@ -87,9 +99,7 @@ class ExpensesByCategoryChart extends ChartWidget
                 ],
                 'y' => [
                     'beginAtZero' => true,
-                    'ticks'       => [
-                        'font' => ['size' => 11],
-                    ],
+                    'ticks'       => ['font' => ['size' => 11]],
                 ],
             ],
         ];
