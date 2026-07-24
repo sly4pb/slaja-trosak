@@ -12,11 +12,15 @@ class AikParser implements BankParserInterface
      * Putanja do Python skripte koja parsuje AIK PDF izvode.
      * Skripta zivi unutar kontejnera, kopirana u image prilikom build-a.
      */
-    private const SCRIPT_PATH = '/var/www/html/python/aik_parser.py';
+    private const SCRIPT_PATH = __DIR__ . '/../../../python/aik_parser.py';
 
     public function parse(string $filePath): Collection
     {
-        $result = Process::run(['python3', self::SCRIPT_PATH, $filePath]);
+        $result = Process::run([
+            base_path('venv/bin/python'),
+            self::SCRIPT_PATH,
+            $filePath
+        ]);
 
         if ($result->failed()) {
             throw new RuntimeException(
