@@ -21,7 +21,7 @@ class OtpParser implements BankParserInterface
     public function parse(string $filePath): Collection
     {
         $result = Process::run([
-            base_path('venv/bin/python'),
+            config('services.python.binary'),
             $this->scriptPath(),
             $filePath
         ]);
