@@ -8,7 +8,12 @@ use Illuminate\Support\Facades\Process;
 
 class PriceCheckService
 {
-    private const SCRIPT_PATH = '/var/www/html/python/price_scraper.py';
+    private const SCRIPT_PATH = null;
+
+    private function scriptPath(): string
+    {
+        return base_path('python/price_scraper.py');
+    }
 
     /**
      * Check the current price for a single tracked product.
@@ -18,7 +23,7 @@ class PriceCheckService
      */
     public function check(TrackedProduct $product): array
     {
-        $result = Process::timeout(30)->run(['python3', self::SCRIPT_PATH, $product->url]);
+        $result = Process::timeout(30)->run(['python3', $this->scriptPath(), $product->url]);
 
         $output = trim($result->output());
         $data   = json_decode($output, true);

@@ -8,13 +8,21 @@ use RuntimeException;
 
 class OtpParser implements BankParserInterface
 {
-    private const SCRIPT_PATH = __DIR__ . '/../../../python/otp_parser.py';
+    /**
+     * Path to the Python script that parses AIK PDF statements.
+     * Uses base_path() so it resolves correctly regardless of deployment
+     * location (Docker at /var/www/html, bare server at /var/www/whatever, etc).
+     */
+    private function scriptPath(): string
+    {
+        return base_path('python/otp_parser.py');
+    }
 
     public function parse(string $filePath): Collection
     {
         $result = Process::run([
             base_path('venv/bin/python'),
-            self::SCRIPT_PATH,
+            $this->scriptPath(),
             $filePath
         ]);
 

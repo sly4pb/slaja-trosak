@@ -9,16 +9,20 @@ use RuntimeException;
 class AikParser implements BankParserInterface
 {
     /**
-     * Putanja do Python skripte koja parsuje AIK PDF izvode.
-     * Skripta zivi unutar kontejnera, kopirana u image prilikom build-a.
+     * Path to the Python script that parses AIK PDF statements.
+     * Uses base_path() so it resolves correctly regardless of deployment
+     * location (Docker at /var/www/html, bare server at /var/www/whatever, etc).
      */
-    private const SCRIPT_PATH = __DIR__ . '/../../../python/aik_parser.py';
+    private function scriptPath(): string
+    {
+        return base_path('python/aik_parser.py');
+    }
 
     public function parse(string $filePath): Collection
     {
         $result = Process::run([
             base_path('venv/bin/python'),
-            self::SCRIPT_PATH,
+            $this->scriptPath(),
             $filePath
         ]);
 
