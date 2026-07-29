@@ -10,6 +10,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
 class CheckProductPricesJob implements ShouldQueue
@@ -24,6 +25,13 @@ class CheckProductPricesJob implements ShouldQueue
             ->chunk(20, function ($products) use ($service) {
                 foreach ($products as $product) {
                     $result = $service->check($product);
+
+                    Log::info('Product checked', [
+                        'id' => $product->id,
+                        'changed' => $result['changed'],
+                        'oldPrice' => $result['oldPrice'],
+                        'newPrice' => $result['newPrice'],
+                    ]);
 
                     if ($result['changed']) {
                         Mail::to($product->user->email)->send(
