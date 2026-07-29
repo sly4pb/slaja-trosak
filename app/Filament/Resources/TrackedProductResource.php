@@ -5,6 +5,7 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\TrackedProductResource\Pages;
 use App\Models\TrackedProduct;
 use App\Services\PriceCheckService;
+use Filament\Actions\DeleteAction;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Schema;
 use Filament\Resources\Resource;
@@ -108,7 +109,7 @@ class TrackedProductResource extends Resource
                           }
                       }),
 
-                Tables\Actions\DeleteAction::make()
+                DeleteAction::make()
                                            ->label('Delete'),
             ])
             ->emptyStateHeading('No tracked products')
