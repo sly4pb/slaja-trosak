@@ -42,9 +42,13 @@ RUN docker-php-ext-configure gd \
 RUN pecl install redis \
     && docker-php-ext-enable redis
 
-# ─── Python paketi za AIK PDF parser (pdfplumber) ──────────
-# --break-system-packages jer Debian/PHP image nema virtualenv po defaultu
-RUN pip3 install --no-cache-dir --break-system-packages pdfplumber
+# ─── Python packages ────────────────────────────────────────
+# pdfplumber: AIK bank PDF parser
+# requests + beautifulsoup4: price tracker scraper
+RUN pip3 install --no-cache-dir --break-system-packages \
+    pdfplumber \
+    requests \
+    beautifulsoup4
 
 # ─── Composer ──────────────────────────────────────────────
 COPY --from=composer:2.7 /usr/bin/composer /usr/bin/composer
