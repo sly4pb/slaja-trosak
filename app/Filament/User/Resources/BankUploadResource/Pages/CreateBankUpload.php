@@ -1,9 +1,9 @@
 <?php
 
-namespace App\Filament\Resources\BankUploadResource\Pages;
+namespace App\Filament\User\Resources\BankUploadResource\Pages;
 
 use App\Enums\BankType;
-use App\Filament\Resources\BankUploadResource;
+use App\Filament\User\Resources\BankUploadResource;
 use App\Services\BankUploadService;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\CreateRecord;

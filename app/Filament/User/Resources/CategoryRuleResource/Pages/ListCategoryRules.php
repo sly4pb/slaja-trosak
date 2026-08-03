@@ -1,8 +1,8 @@
 <?php
 
-namespace App\Filament\Resources\CategoryRuleResource\Pages;
+namespace App\Filament\User\Resources\CategoryRuleResource\Pages;
 
-use App\Filament\Resources\CategoryRuleResource;
+use App\Filament\User\Resources\CategoryRuleResource;
 use Filament\Resources\Pages\ListRecords;
 
 class ListCategoryRules extends ListRecords

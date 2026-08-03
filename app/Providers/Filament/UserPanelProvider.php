@@ -6,7 +6,6 @@ use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
-use Filament\Pages;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
@@ -18,32 +17,37 @@ use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 
-class AdminPanelProvider extends PanelProvider
+class UserPanelProvider extends PanelProvider
 {
     public function panel(Panel $panel): Panel
     {
         return $panel
-            ->default()
-            ->id('admin')
-            ->path('admin')
+            ->id('user')
+            ->path('')
             ->authGuard('web')
-            ->login()
+            ->login(\App\Filament\Pages\Auth\Login::class)
             ->registration(\App\Filament\Pages\Auth\Register::class)
             ->colors([
                 'primary' => Color::Amber,
             ])
             ->sidebarCollapsibleOnDesktop()
-            // TransactionResource is the only resource shared with the admin panel.
-            // It lives in the shared app/Filament/Resources folder (not discovered
-            // automatically here) and is registered explicitly in both panels.
+            ->discoverResources(
+                in: app_path('Filament/User/Resources'),
+                for: 'App\\Filament\\User\\Resources'
+            )
             ->resources([
                 \App\Filament\Resources\TransactionResource::class,
             ])
-            ->discoverPages(in: app_path('Filament/Pages'), for: 'App\\Filament\\Pages')
-            ->pages([
-                Pages\Dashboard::class,
-            ])
-            ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\\Filament\\Widgets')
+            ->discoverPages(
+                in: app_path('Filament/User/Pages'),
+                for: 'App\\Filament\\User\\Pages'
+            )
+            ->pages([])
+            ->homeUrl(fn () => url('/transactions'))
+            ->discoverWidgets(
+                in: app_path('Filament/User/Widgets'),
+                for: 'App\\Filament\\User\\Widgets'
+            )
             ->widgets([
                 Widgets\AccountWidget::class,
             ])
@@ -55,8 +59,8 @@ class AdminPanelProvider extends PanelProvider
                 ShareErrorsFromSession::class,
                 VerifyCsrfToken::class,
                 SubstituteBindings::class,
-                DisableBladeIconComponents::class,
-                DispatchServingFilamentEvent::class,
+//                DisableBladeIconComponents::class,
+//                DispatchServingFilamentEvent::class,
             ])
             ->authMiddleware([
                 Authenticate::class,

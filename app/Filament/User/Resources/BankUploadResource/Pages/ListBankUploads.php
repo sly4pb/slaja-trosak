@@ -1,8 +1,8 @@
 <?php
 
-namespace App\Filament\Resources\BankUploadResource\Pages;
+namespace App\Filament\User\Resources\BankUploadResource\Pages;
 
-use App\Filament\Resources\BankUploadResource;
+use App\Filament\User\Resources\BankUploadResource;
 use Filament\Actions;
 use Filament\Resources\Pages\ListRecords;
 
