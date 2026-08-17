@@ -164,16 +164,42 @@ If you need per-panel post-login redirects again in the future (e.g. a third
 panel), extend `PostLoginResponse`'s match/if logic — don't add a
 `getRedirectUrl()` override to a page class, it won't be called.
 
-The second symptom (419 on widget requests) was observed in the same
-reproduction but not fully root-caused beyond "was likely a side effect of
-bouncing through `/` before landing on `/transactions`". If it recurs after
-this fix, check the browser Network tab for the failing
-`POST /livewire/update` request headers (`X-CSRF-TOKEN` vs. current session
-cookie) — the `TransactionResource` list page has 5 dashboard widgets
+### ⚠️ Fixed bug (2026-08-17): 419 "This page has expired" on the 5 dashboard widgets
+
+The second symptom from the reproduction above (5 concurrent
+`POST /livewire/update` → `419` right after landing on `/transactions`, and
+Livewire's "This page has expired" confirm dialog) was **not CSRF at all**.
+Session, cookies and `X-CSRF-TOKEN` were all valid — replaying the exact
+widget requests with a freshly issued token still returned 419.
+
+Root cause: on every Livewire update request,
+`Livewire\Features\SupportReleaseTokens\ReleaseToken::verify()` first resolves
+the component *name* from the snapshot back to a class via
+`ComponentRegistry::getClass()`. If that lookup throws
+`ComponentNotFoundException`, Livewire rethrows it as
+`LivewireReleaseTokenMismatchException`, which renders as **419 Page
+Expired** — a very misleading status. The 5 widgets
 (`TransactionStatsWidget`, `ExpensesVsIncomeChart`, `ExpensesByMonthChart`,
-`ExpensesByCategoryChart`, `ExpensesByTypeChart`) that each fire their own
-lazy-loaded Livewire request on mount, which is consistent with 5 concurrent
-`419` responses seen in nginx logs.
+`ExpensesByCategoryChart`, `ExpensesByTypeChart`) were only listed in
+`ListTransactions::getHeaderWidgets()` and **not** in
+`TransactionResource::getWidgets()`, and Filament's
+`Panel::registerLivewireComponents()` registers resource widgets exclusively
+from `$resource::getWidgets()`. So the widgets rendered fine on first page
+load (mounted by class), but their names were unresolvable on every
+subsequent Livewire request → exactly 5 × 419, on both panels, regardless of
+session state.
+
+Fix: added `TransactionResource::getWidgets()` returning the 5 widget
+classes. Rule of thumb: any widget used in a resource page's
+`getHeaderWidgets()`/`getFooterWidgets()` must also be returned from the
+resource's `getWidgets()` (or be registered via the panel's
+`->widgets([...])`), otherwise Livewire updates for it 419.
+
+Also re-enabled `DisableBladeIconComponents` and `DispatchServingFilamentEvent`
+in `UserPanelProvider`'s middleware (they were commented out, presumably
+leftover debugging) so the user panel's middleware list matches
+`AdminPanelProvider` and Filament's standard stack. They were not the cause
+of the 419, but there is no reason for the two panels to differ here.
 
 ### Local dev gotcha: don't run `php artisan` directly on the host
 

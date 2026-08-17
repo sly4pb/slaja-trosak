@@ -6,6 +6,7 @@ use App\Enums\BankType;
 use App\Enums\TransactionCategory;
 use App\Enums\UserRole;
 use App\Filament\Resources\TransactionResource\Pages;
+use App\Filament\Resources\TransactionResource\Widgets;
 use App\Models\Transaction;
 use App\Models\TransactionComment;
 use App\Services\CategoryRuleService;
@@ -365,6 +366,17 @@ class TransactionResource extends Resource
         return [
             'index'  => Pages\ListTransactions::route('/'),
             'create' => Pages\CreateTransaction::route('/create'),
+        ];
+    }
+
+    public static function getWidgets(): array
+    {
+        return [
+            Widgets\TransactionStatsWidget::class,
+            Widgets\ExpensesVsIncomeChart::class,
+            Widgets\ExpensesByTypeChart::class,
+            Widgets\ExpensesByMonthChart::class,
+            Widgets\ExpensesByCategoryChart::class,
         ];
     }
 }
