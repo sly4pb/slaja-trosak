@@ -37,6 +37,11 @@ class UserPanelProvider extends PanelProvider
             )
             ->resources([
                 \App\Filament\Resources\TransactionResource::class,
+                // Price Tracker is a user-facing feature. It still lives in the
+                // shared app/Filament/Resources folder, so it must be registered
+                // explicitly here — the admin panel no longer auto-discovers that
+                // folder, and this panel only discovers app/Filament/User/Resources.
+                \App\Filament\Resources\TrackedProductResource::class,
             ])
             ->discoverPages(
                 in: app_path('Filament/User/Pages'),

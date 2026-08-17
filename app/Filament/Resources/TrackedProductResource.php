@@ -33,7 +33,7 @@ class TrackedProductResource extends Resource
                      ->required()
                      ->maxLength(2048)
                      ->placeholder('https://www.example.com/product-page')
-                     ->helperText('Paste a product page URL. We\'ll check the price every 6 hours.'),
+                     ->helperText('Paste a product page URL. We\'ll check the price once a day (around 11:00).'),
         ]);
     }
 

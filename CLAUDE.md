@@ -46,8 +46,18 @@ solo project with simple git usage.
   parses JSON output, updates `current_price` / `status` (`ok`/`failed`),
   records `ProductPriceHistory`.
 - `CheckProductPricesJob` (queued) — chunks through all tracked products,
-  emails `PriceChangedMail` when price changes. Scheduled daily at 11:00 in
-  `routes/console.php`.
+  emails `PriceChangedMail` when price changes. Scheduled daily at 11:00
+  (app timezone, `APP_TIMEZONE` in `.env`) in `routes/console.php`.
+  Per-product work is wrapped in try/catch (service catches scraper process
+  failures/timeouts, job catches everything else) so one broken product or a
+  mail error cannot abort the rest of the run.
+- `PriceChangedMail` renders `emails/price-changed.blade.php` as
+  **markdown** (`Content(markdown: ...)`) — the template uses
+  `<x-mail::message>` components, so `Content(view: ...)` throws
+  "No hint path defined for [mail]" (bug fixed 2026-08-17; the daily job had
+  never successfully sent a price-change email before that).
+- Executes only if the **scheduler and queue worker containers** are running —
+  see "Scheduler & queue" below. There is no cron inside the app container.
 
 ## Users & roles
 
@@ -64,7 +74,8 @@ Two panels registered in `bootstrap/providers.php`:
 
 - `App\Providers\Filament\AdminPanelProvider`
   - id: `admin`, path: `admin`, marked `->default()`
-  - default Filament login (`->login()`), custom `Register` page
+  - shared custom login page `App\Filament\Pages\Auth\Login` (see
+    "Role-aware login" below), custom `Register` page
   - only shared resource: `App\Filament\Resources\TransactionResource`
   - routes: `/admin`, `/admin/login`, `/admin/register`,
     `/admin/transactions`, `/admin/transactions/create`
@@ -73,8 +84,11 @@ Two panels registered in `bootstrap/providers.php`:
   - custom login page `App\Filament\Pages\Auth\Login` (redirects to
     `/transactions` after login), custom `Register` page
   - resources auto-discovered from `app/Filament/User/Resources`
-    (`BankUploadResource`, `CategoryRuleResource`) **plus** the shared
-    `TransactionResource`
+    (`BankUploadResource`, `CategoryRuleResource`) **plus**, registered
+    explicitly from the shared `app/Filament/Resources` folder:
+    `TransactionResource` and `TrackedProductResource` (Price Tracker is
+    user-facing and would otherwise be registered in no panel, since the
+    admin panel no longer auto-discovers the shared folder)
   - `homeUrl` → `/transactions`
   - routes: `/login`, `/register`, `/transactions`,
     `/transactions/create`, plus discovered user resources
@@ -164,6 +178,38 @@ If you need per-panel post-login redirects again in the future (e.g. a third
 panel), extend `PostLoginResponse`'s match/if logic — don't add a
 `getRedirectUrl()` override to a page class, it won't be called.
 
+The same fallback exists for **registration**: Filament's default
+`RegistrationResponse` also redirects to `Filament::getUrl()`, which means
+`/register` would land on `/` (welcome page) and `/admin/register` would land
+on `/admin` — an instant 403, because every self-registered account gets the
+`user` role and `canAccessPanel('admin')` denies it. Fixed the same way:
+`app/Filament/Auth/PostRegistrationResponse.php` (always redirects to
+`/transactions` — both panels share the `web` guard, so the session is valid
+there) bound to the `RegistrationResponse` contract in
+`AppServiceProvider::register()`.
+
+### Role-aware login & entry (2026-08-17)
+
+After login, **admins always land on `/admin` and regular users on
+`/transactions`, no matter which login form they used**:
+
+- `App\Filament\Pages\Auth\Login` (registered on **both** panels) overrides
+  `authenticate()`: Filament's base page rejects valid credentials when the
+  account can't access the *current* panel (`attemptWhen` +
+  `canAccessPanel`), which used to mean an admin typing correct credentials
+  on `/login` got "invalid credentials". The override catches that case,
+  re-validates the credentials itself, confirms the account can access at
+  least one panel, and completes the login (both panels share the `web`
+  guard). Wrong passwords are still rejected. Panel *entry* remains
+  protected by `canAccessPanel()` via Filament's `Authenticate` middleware.
+- `App\Filament\Auth\PostLoginResponse` routes by **role**, not by panel:
+  admin → `/admin`, user → `/transactions`. A stored `url.intended` is
+  honoured only if it belongs to the panel that role can enter (otherwise
+  the redirect would 403 immediately after login).
+- `routes/web.php` `/` is a role-aware entry point: guest → `/login`,
+  user → `/transactions`, admin → `/admin` (the stock `welcome` view is no
+  longer reachable).
+
 ### ⚠️ Fixed bug (2026-08-17): 419 "This page has expired" on the 5 dashboard widgets
 
 The second symptom from the reproduction above (5 concurrent
@@ -210,14 +256,40 @@ database (`SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for
 db failed`). Always use `docker compose exec app php artisan ...` (or the
 `make artisan ...` / `make tinker` shortcuts) when the stack is run via
 Docker, which is the actual way this project runs locally (`docker compose
-ps` shows `app`, `db`, `nginx`, `redis`, `mailpit` — nginx maps host port
-`8091` → container port `80`, matching `APP_URL=http://slaja-trosak.local:8091`).
+ps` shows `app`, `db`, `nginx`, `redis`, `mailpit`, `scheduler`, `queue` —
+nginx maps host port `8091` → container port `80`, matching
+`APP_URL=http://slaja-trosak.local:8091`; redis publishes host port
+`${REDIS_PORT_FORWARD:-6379}`, set to `6391` in `.env` because `6379` on
+this machine is taken by `pandora-redis`).
+
+## Scheduler & queue (how the daily price check actually runs)
+
+Two dedicated compose services (added 2026-08-17 — before that, **nothing
+executed the schedule or the queue**, so the daily price check never ran):
+
+- `scheduler` — `php artisan schedule:work` (fires due scheduled tasks every
+  minute; replaces a host cron for `schedule:run`).
+- `queue` — `php artisan queue:work --tries=3 --timeout=650 --sleep=3`
+  (`QUEUE_CONNECTION=database`). Invariant to keep:
+  `DB_QUEUE_RETRY_AFTER` (660, in `.env`) > worker `--timeout` (650) >
+  job `$timeout` (600 in `CheckProductPricesJob`), otherwise a long run gets
+  picked up twice and users receive duplicate price-change emails.
+
+**Gotcha:** `queue:work` keeps the whole app in memory — after changing any
+code that a queued job touches, `docker compose restart queue`, or the
+worker keeps executing the old code (bit us during the mail-markdown fix).
+
+`APP_TIMEZONE=Europe/Belgrade` is set in `.env` — without it Laravel runs on
+UTC and `dailyAt('11:00')` means 13:00 local time in summer.
+
+Mail: `.env` uses `MAIL_MAILER=smtp` + `MAIL_HOST=mailpit` + `MAIL_PORT=1025`,
+so locally sent mail lands in the Mailpit UI on `http://localhost:8025`.
+(It previously pointed at the `log` mailer, so emails only ever appeared in
+`storage/logs/`.) A real deployment needs real SMTP credentials here.
 
 ## Known gaps / things to watch
 
 - Erste bank parser not implemented (`ParserFactory` throws for it).
-- `routes/web.php` has a leftover `/debug-session` debug route — remove once
-  no longer needed for auth/session debugging.
 - No automated tests yet covering panel access control
   (`tests/Feature`/`tests/Unit` are still the default Laravel skeleton) —
   worth adding a feature test asserting a `user`-role account gets 403 on

@@ -3,11 +3,6 @@
 namespace App\Filament\Resources\TransactionResource\Pages;
 
 use App\Filament\Resources\TransactionResource;
-use App\Filament\Resources\TransactionResource\Widgets\ExpensesByMonthChart;
-use App\Filament\Resources\TransactionResource\Widgets\ExpensesByTypeChart;
-use App\Filament\Resources\TransactionResource\Widgets\ExpensesVsIncomeChart;
-use App\Filament\Resources\TransactionResource\Widgets\ExpensesByCategoryChart;
-use App\Filament\Resources\TransactionResource\Widgets\TransactionStatsWidget;
 use App\Models\Transaction;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
@@ -34,13 +29,9 @@ class ListTransactions extends ListRecords
 
     protected function getHeaderWidgets(): array
     {
-        return [
-            TransactionStatsWidget::class,
-            ExpensesVsIncomeChart::class,
-            ExpensesByTypeChart::class,
-            ExpensesByMonthChart::class,
-            ExpensesByCategoryChart::class,
-        ];
+        // Single source of truth: the same list registers the widgets as
+        // Livewire components in both panels (see TransactionResource::getWidgets()).
+        return TransactionResource::getWidgets();
     }
 
     public function getHeaderWidgetsColumns(): int | array

@@ -27,7 +27,10 @@ class AdminPanelProvider extends PanelProvider
             ->id('admin')
             ->path('admin')
             ->authGuard('web')
-            ->login()
+            // Shared login page: accepts valid credentials of either role and
+            // relies on PostLoginResponse to route admins to /admin and
+            // regular users to /transactions.
+            ->login(\App\Filament\Pages\Auth\Login::class)
             ->registration(\App\Filament\Pages\Auth\Register::class)
             ->colors([
                 'primary' => Color::Amber,

@@ -3,7 +3,6 @@
 namespace App\Filament\User\Resources;
 
 use App\Enums\TransactionCategory;
-use App\Filament\Resources\CategoryRuleResource\Pages;
 use App\Models\CategoryRule;
 use App\Models\Transaction;
 use Filament\Actions\Action;
