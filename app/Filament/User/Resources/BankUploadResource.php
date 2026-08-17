@@ -1,10 +1,12 @@
 <?php
 
-namespace App\Filament\Resources;
+namespace App\Filament\User\Resources;
 
 use App\Enums\BankType;
 use App\Filament\Resources\BankUploadResource\Pages;
+use App\Filament\Resources\TransactionResource;
 use App\Models\BankUpload;
+use Filament\Actions\Action;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Resources\Resource;
@@ -12,7 +14,6 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Filament\Actions\Action;
 
 class BankUploadResource extends Resource
 {
@@ -149,8 +150,8 @@ class BankUploadResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index'  => Pages\ListBankUploads::route('/'),
-            'create' => Pages\CreateBankUpload::route('/create'),
+            'index'  => BankUploadResource\Pages\ListBankUploads::route('/'),
+            'create' => BankUploadResource\Pages\CreateBankUpload::route('/create'),
         ];
     }
 }

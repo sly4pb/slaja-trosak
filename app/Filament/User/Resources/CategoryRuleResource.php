@@ -1,11 +1,12 @@
 <?php
 
-namespace App\Filament\Resources;
+namespace App\Filament\User\Resources;
 
 use App\Enums\TransactionCategory;
 use App\Filament\Resources\CategoryRuleResource\Pages;
 use App\Models\CategoryRule;
 use App\Models\Transaction;
+use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -14,7 +15,6 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Filament\Actions\Action;
 
 class CategoryRuleResource extends Resource
 {
@@ -135,8 +135,8 @@ class CategoryRuleResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index' => Pages\ListCategoryRules::route('/'),
-            'edit'  => Pages\EditCategoryRule::route('/{record}/edit'),
+            'index' => CategoryRuleResource\Pages\ListCategoryRules::route('/'),
+            'edit'  => CategoryRuleResource\Pages\EditCategoryRule::route('/{record}/edit'),
         ];
     }
 }
