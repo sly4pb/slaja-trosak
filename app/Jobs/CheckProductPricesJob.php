@@ -24,23 +24,32 @@ class CheckProductPricesJob implements ShouldQueue
         TrackedProduct::with('user')
             ->chunk(20, function ($products) use ($service) {
                 foreach ($products as $product) {
-                    $result = $service->check($product);
+                    // One broken product (or a mail failure) must not stop
+                    // the price checks for everything after it.
+                    try {
+                        $result = $service->check($product);
 
-                    Log::info('Product checked', [
-                        'id' => $product->id,
-                        'changed' => $result['changed'],
-                        'oldPrice' => $result['oldPrice'],
-                        'newPrice' => $result['newPrice'],
-                    ]);
+                        Log::info('Product checked', [
+                            'id' => $product->id,
+                            'changed' => $result['changed'],
+                            'oldPrice' => $result['oldPrice'],
+                            'newPrice' => $result['newPrice'],
+                        ]);
 
-                    if ($result['changed']) {
-                        Mail::to($product->user->email)->send(
-                            new PriceChangedMail(
-                                $product,
-                                $result['oldPrice'],
-                                $result['newPrice'],
-                            )
-                        );
+                        if ($result['changed'] && $product->user) {
+                            Mail::to($product->user->email)->send(
+                                new PriceChangedMail(
+                                    $product,
+                                    $result['oldPrice'],
+                                    $result['newPrice'],
+                                )
+                            );
+                        }
+                    } catch (\Throwable $e) {
+                        Log::error('Product check failed', [
+                            'id' => $product->id,
+                            'error' => $e->getMessage(),
+                        ]);
                     }
                 }
             });

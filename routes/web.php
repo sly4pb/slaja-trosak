@@ -2,15 +2,14 @@
 
 use Illuminate\Support\Facades\Route;
 
+// Role-aware entry point: guests go to the login form, authenticated users
+// land in their own panel (see also App\Filament\Auth\PostLoginResponse).
 Route::get('/', function () {
-    return view('welcome');
-});
+    $user = auth()->user();
 
-Route::get('/debug-session', function () {
-    return [
-        'session_id' => session()->getId(),
-        'user_id' => auth()->id(),
-        'cookie_name' => config('session.cookie'),
-        'session_exists' => session()->exists('_token'),
-    ];
+    if (! $user) {
+        return redirect('/login');
+    }
+
+    return redirect($user->isAdmin() ? '/admin' : '/transactions');
 });

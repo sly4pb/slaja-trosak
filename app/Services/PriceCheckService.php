@@ -8,8 +8,6 @@ use Illuminate\Support\Facades\Process;
 
 class PriceCheckService
 {
-    private const SCRIPT_PATH = null;
-
     private function scriptPath(): string
     {
         return base_path('python/price_scraper.py');
@@ -23,7 +21,19 @@ class PriceCheckService
      */
     public function check(TrackedProduct $product): array
     {
-        $result = Process::timeout(30)->run(['python3', $this->scriptPath(), $product->url]);
+        // A hung site throws ProcessTimedOutException — mark this product as
+        // failed instead of letting the exception abort the whole batch run.
+        try {
+            $result = Process::timeout(30)->run(['python3', $this->scriptPath(), $product->url]);
+        } catch (\Throwable $e) {
+            $product->update([
+                'status'          => 'failed',
+                'error_message'   => 'Scraper process failed: ' . substr($e->getMessage(), 0, 300),
+                'last_checked_at' => now(),
+            ]);
+
+            return ['changed' => false, 'oldPrice' => null, 'newPrice' => null];
+        }
 
         $output = trim($result->output());
         $data   = json_decode($output, true);
@@ -31,7 +41,7 @@ class PriceCheckService
         if (json_last_error() !== JSON_ERROR_NONE || $data === null) {
             $product->update([
                 'status'          => 'failed',
-                'error_message'   => 'Invalid scraper output: ' . substr($output, 0, 300),
+                'error_message'   => 'Invalid scraper output: ' . substr(trim($output . ' ' . $result->errorOutput()), 0, 300),
                 'last_checked_at' => now(),
             ]);
 

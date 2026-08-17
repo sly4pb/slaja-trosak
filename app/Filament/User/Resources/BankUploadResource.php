@@ -3,7 +3,6 @@
 namespace App\Filament\User\Resources;
 
 use App\Enums\BankType;
-use App\Filament\Resources\BankUploadResource\Pages;
 use App\Filament\Resources\TransactionResource;
 use App\Models\BankUpload;
 use Filament\Actions\Action;
